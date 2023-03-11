@@ -16,6 +16,7 @@ type Socket interface {
 }
 
 type SocketImpl struct {
+	room       string
 	outBound   chan<- string
 	inBound    <-chan string
 	conn       *websocket.Conn
@@ -39,6 +40,10 @@ func (s *SocketImpl) WGOutbound() *sync.WaitGroup {
 func (s *SocketImpl) Close() error {
 	s.outboundWG.Wait()
 	return s.conn.Close()
+}
+
+func (s *SocketImpl) Room() string {
+	return s.room
 }
 
 func NewSocket(w http.ResponseWriter, r *http.Request) (Socket, error) {

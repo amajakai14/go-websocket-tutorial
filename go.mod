@@ -1,4 +1,4 @@
-module sample/websocket
+module github.com/amajakai14/go-websocket-tutorial
 
 go 1.19
 

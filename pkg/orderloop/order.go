@@ -1,7 +1,7 @@
 package orderloop
 
 import (
-	server 
+	"github.com/amajakai14/go-websocket-tutorial/pkg/server"
 )
 
 type BuffetChannel struct {
