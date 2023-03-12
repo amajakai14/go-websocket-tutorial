@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -37,6 +38,17 @@ type Hub struct {
 type Message struct {
 	data []byte
 	room string
+}
+
+type Payload struct {
+	ChannelId string      `json:"channel_id"`
+	Menu      MenuPayload `json:"menu"`
+}
+
+type MenuPayload struct {
+	MenuId   int    `json:"id"`
+	MenuName string `json:"name"`
+	UserId   int    `json:"user_id"`
 }
 
 const (
@@ -104,6 +116,7 @@ func (h *Hub) run() {
 }
 
 func (s Subscription) readPump() {
+	log.Println("print readPump")
 	c := s.conn
 	defer func() {
 		hub.unregister <- s
@@ -120,17 +133,29 @@ func (s Subscription) readPump() {
 			}
 			break
 		}
-		m := Message{message, s.room}
+		var pp Payload
+		err = json.Unmarshal(message, &pp)
+		if err != nil {
+			log.Println(err)
+		}
+		log.Printf("Received message from %+v %v: %v\n", pp, pp.ChannelId, pp.Menu.MenuName)
+		v, err := json.Marshal(pp)
+		if err != nil {
+			log.Println(err)
+		}
+		m := Message{[]byte(v), s.room}
 		hub.broadcast <- m
 	}
 }
 
 func (c *Connection) write(messageType int, payload []byte) error {
+	log.Println("print write")
 	c.ws.SetWriteDeadline(time.Now().Add(writeWait))
 	return c.ws.WriteMessage(messageType, payload)
 }
 
 func (s *Subscription) writePump() {
+	log.Println("print writePump")
 	c := s.conn
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {

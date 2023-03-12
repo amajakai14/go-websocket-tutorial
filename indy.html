@@ -7,6 +7,14 @@
         let conn;
         let msg = document.getElementById("msg");
         let log = document.getElementById("log");
+        const payload = {
+          channel_id: "indy",
+          menu: {
+            id: 1,
+            name: "delicious potato",
+            user_id: 542,
+          },
+        };
 
         function appendLog(item) {
           let doScroll =
@@ -24,7 +32,7 @@
           if (!msg.value) {
             return false;
           }
-          conn.send(msg.value);
+          conn.send(JSON.stringify(payload));
           msg.value = "";
           return false;
         };

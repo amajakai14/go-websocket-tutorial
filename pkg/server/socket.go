@@ -13,15 +13,16 @@ type Socket interface {
 	Close() error
 	IsClosed() bool
 	WGOutbound() *sync.WaitGroup
+	Room() string
 }
 
 type SocketImpl struct {
-	room       string
 	outBound   chan<- string
 	inBound    <-chan string
 	conn       *websocket.Conn
 	closed     bool
 	outboundWG sync.WaitGroup
+	room 	 string
 }
 
 func (s *SocketImpl) GetOutBound() chan<- string {
@@ -37,6 +38,10 @@ func (s *SocketImpl) WGOutbound() *sync.WaitGroup {
 	return &s.outboundWG
 }
 
+func (s *SocketImpl) IsClosed() bool {
+	return s.closed
+}
+
 func (s *SocketImpl) Close() error {
 	s.outboundWG.Wait()
 	return s.conn.Close()
@@ -46,7 +51,7 @@ func (s *SocketImpl) Room() string {
 	return s.room
 }
 
-func NewSocket(w http.ResponseWriter, r *http.Request) (Socket, error) {
+func NewSocket(w *http.ResponseWriter, r *http.Request, room string) (Socket, error) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return nil, err
@@ -62,6 +67,7 @@ func NewSocket(w http.ResponseWriter, r *http.Request) (Socket, error) {
 		c,
 		false,
 		sync.WaitGroup{},
+		room,
 	}
 
 	go func() {
