@@ -35,15 +35,15 @@ func ServeWs(ws *WsServer, w http.ResponseWriter, r *http.Request, roomId string
 		return
 	}
 	subscriber := NewSubscriber(conn, ws, roomId)
-	go subscriber.readPump()
-	go subscriber.writePump()
+	go subscriber.readPump(ws)
+	go subscriber.writePump(ws)
 
-	room, ok := ws.rooms[roomId]; 
+	room, ok := ws.rooms[roomId]
 	if !ok {
 		log.Println("creating new room")
 		room = ws.createRoom(roomId)
 	}
-	
+
 	room.register <- subscriber
 }
 
@@ -56,9 +56,12 @@ func NewSubscriber(conn *websocket.Conn, wsServer *WsServer, room string) *Subsc
 	}
 }
 
-func (sub *Subscriber) readPump() {
+func (sub *Subscriber) readPump(ws *WsServer) {
 	log.Println("waiting for messages")
 	defer func() {
+		log.Println("closing connection")
+		ws.unregister <- sub
+		ws.rooms[sub.room].unregister <- sub
 		sub.disconnect()
 	}()
 	sub.conn.SetReadLimit(maxMessageSize)
@@ -86,12 +89,14 @@ func (sub *Subscriber) readPump() {
 	}
 }
 
-func (sub *Subscriber) writePump() {
+func (sub *Subscriber) writePump(ws *WsServer) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		log.Println("write pump is closing")
+		ws.unregister <- sub
+		ws.rooms[sub.room].unregister <- sub
 		ticker.Stop()
-		sub.conn.Close()
+		sub.disconnect()
 	}()
 	log.Println("write pump start running")
 	for {
