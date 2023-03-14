@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -29,18 +28,24 @@ type Subscriber struct {
 	room     string
 }
 
-func ServeWs(ws *WsServer, w http.ResponseWriter, r *http.Request) error {
-	room := r.URL.Query().Get("room")
-	if room == "" {
-		return errors.New("No room specified")
-	}
+func ServeWs(ws *WsServer, w http.ResponseWriter, r *http.Request, roomId string) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		return errors.New("Failed to upgrade connection")
+		log.Println("error on upgrading connection to websocket")
+		return
 	}
-	subscriber := NewSubscriber(conn, ws, room)
-	//TODO writepump and readpump
-	return nil
+	subscriber := NewSubscriber(conn, ws, roomId)
+	go subscriber.readPump()
+	go subscriber.writePump()
+
+	room, ok := ws.rooms[roomId]; 
+	if !ok {
+		log.Println("creating new room")
+		room = ws.createRoom(roomId)
+	}
+	
+	ws.register <- subscriber
+	room.register <- subscriber
 }
 
 func NewSubscriber(conn *websocket.Conn, wsServer *WsServer, room string) *Subscriber {
@@ -53,6 +58,7 @@ func NewSubscriber(conn *websocket.Conn, wsServer *WsServer, room string) *Subsc
 }
 
 func (sub *Subscriber) readPump() {
+	log.Println("waiting for messages")
 	defer func() {
 		sub.disconnect()
 	}()
@@ -72,32 +78,75 @@ func (sub *Subscriber) readPump() {
 			break
 		}
 		if tm != websocket.TextMessage {
+			log.Println("not a text message")
 			continue
+		}
+		log.Println("send to handle message")
+		sub.handleInboundMessage(msg)
+
+	}
+}
+
+func (sub *Subscriber) writePump() {
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		log.Println("write pump is closing")
+		ticker.Stop()
+		sub.conn.Close()
+	}()
+	log.Println("write pump start running")
+	for {
+		select {
+		case msg, ok := <-sub.send:
+			log.Println("writing message")
+			if !ok {
+				log.Println("not ok")
+				sub.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			if err := sub.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Fatalf("error on sending message from server: %v", err)
+				return
+			}
+			log.Println("message written")
+
+		case <-ticker.C:
+			if err := sub.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }
 
 func (sub *Subscriber) handleInboundMessage(msg []byte) {
+	log.Println("inboud msg is coming")
 	var msgEnvelope MessageEnvelope
 	if err := json.Unmarshal(msg, &msgEnvelope); err != nil {
 		log.Printf("unable on Unmarshal json: %v", err)
 	}
+	log.Printf("msgEnvelope: %v", msgEnvelope)
 
 	switch msgEnvelope.Action {
 	case Join:
-		log.Println("Join")
-	case Leave:
-		log.Println("Leave")
-	case Add:
 		if room := sub.wsServer.getRoom(sub.room); room != nil {
-			room.addMenu(&msgEnvelope.Message)
-
+			sub.conn.WriteMessage(websocket.TextMessage, room.toOutBoundMenus())
 		}
-		log.Println("Add")
+	case Add:
+		log.Println("adding menu")
+		room := sub.wsServer.getRoom(sub.room)
+		room.addMenu(&msgEnvelope.Message)
+		room.broadcast <- room.toOutBoundMenus()
 	case Delete:
-		log.Println("Delete")
+		if room := sub.wsServer.getRoom(sub.room); room != nil {
+			room.deleteMenu(&msgEnvelope.Message)
+			room.broadcast <- room.toOutBoundMenus()
+		}
 	case Reset:
-		log.Println("Reset")
+		if room := sub.wsServer.getRoom(sub.room); room != nil {
+			room.deleteMenu(&msgEnvelope.Message)
+			room.broadcast <- []byte{}
+		}
 	}
 }
 

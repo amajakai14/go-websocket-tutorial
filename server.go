@@ -63,6 +63,7 @@ func (s *WsServer) broadcastMessage(msg []byte) {
 
 func (s *WsServer) createRoom(id string) *Room {
 	room := NewRoom(id)
+	go room.RunRoom()
 	s.rooms[id] = room
 	return room
 }
