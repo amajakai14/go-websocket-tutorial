@@ -30,6 +30,17 @@ func NewRoom(id string) *Room {
 
 }
 
+func (room *Room) hasSubscriber() bool {
+	return len(room.subscriber) > 0
+}
+
+func (room *Room) cleanupMenus() {
+	if room.hasSubscriber() {
+		return
+	}
+	room.menuState = make(map[int]*Menu)
+}
+
 func (room *Room) RunRoom() {
 	for {
 		select {
@@ -40,6 +51,7 @@ func (room *Room) RunRoom() {
 			if _, ok := room.subscriber[subscriber]; ok {
 				delete(room.subscriber, subscriber)
 				close(subscriber.send)
+				room.cleanupMenus()
 			}
 		case message := <-room.broadcast:
 			log.Println("broadcasting message from room")
