@@ -44,7 +44,6 @@ func ServeWs(ws *WsServer, w http.ResponseWriter, r *http.Request, roomId string
 		room = ws.createRoom(roomId)
 	}
 	
-	ws.register <- subscriber
 	room.register <- subscriber
 }
 
@@ -70,17 +69,17 @@ func (sub *Subscriber) readPump() {
 	})
 
 	for {
-		tm, msg, err := sub.conn.ReadMessage()
+		_, msg, err := sub.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
 			break
 		}
-		if tm != websocket.TextMessage {
+		/* if tm != websocket.TextMessage {
 			log.Println("not a text message")
 			continue
-		}
+		} */
 		log.Println("send to handle message")
 		sub.handleInboundMessage(msg)
 
@@ -100,7 +99,6 @@ func (sub *Subscriber) writePump() {
 		case msg, ok := <-sub.send:
 			log.Println("writing message")
 			if !ok {
-				log.Println("not ok")
 				sub.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -151,6 +149,5 @@ func (sub *Subscriber) handleInboundMessage(msg []byte) {
 }
 
 func (sub *Subscriber) disconnect() {
-	sub.wsServer.unregister <- sub
 	sub.conn.Close()
 }

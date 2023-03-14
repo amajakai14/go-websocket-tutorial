@@ -33,16 +33,17 @@
 				let payload = {
 					action: 1,
 					menu: {
-						menu_id: 1,
-						menu_name: "hello world",
-						quantity: 3,
+						menu_id: id,
+						menu_name: name,
+						quantity: qtt,
 						order_users: [542, 23],
 					},
 				};
 				if (!conn) {
 					return false;
 				}
-				if (!msg.value) {
+				if (!menuId.value || !menuName.value || !quantity.value) {
+					console.error("need some required fields")
 					return false;
 				}
 				conn.send(JSON.stringify(payload));
