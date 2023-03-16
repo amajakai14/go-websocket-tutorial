@@ -29,9 +29,13 @@ type Subscriber struct {
 }
 
 func ServeWs(ws *WsServer, w http.ResponseWriter, r *http.Request, roomId string) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "*")
+	upgrader.CheckOrigin = func(r *http.Request) bool { return true } //TODO implement check origin on read production
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("error on upgrading connection to websocket")
+		log.Printf("error on upgrading connection: %v", err)
 		return
 	}
 	subscriber := NewSubscriber(conn, ws, roomId)
